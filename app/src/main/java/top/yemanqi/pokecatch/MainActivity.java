@@ -27,7 +27,7 @@ import android.widget.TextView;
 
 public class MainActivity extends Activity {
 
-    private static final String START_URL = "https://pokecatch-online.netlify.app/";
+    private static final String START_URL = "https://dsh.mianqi.top/pokecatch/";
 
     private WebView webView;
     private LinearLayout offlineView;
@@ -90,7 +90,7 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString();
-                if (url.contains("pokecatch-online")) return false;
+                if (url.contains("dsh.mianqi.top/pokecatch")) return false;
                 try {
                     startActivity(new Intent(Intent.ACTION_VIEW, request.getUrl()));
                 } catch (Exception ignored) { }
