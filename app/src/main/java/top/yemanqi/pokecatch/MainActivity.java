@@ -69,7 +69,7 @@ public class MainActivity extends Activity {
                     .setServiceWorkerClient(new android.webkit.ServiceWorkerClient() {
                         @Override
                         public android.webkit.WebResourceResponse shouldInterceptRequest(
-                                WebView view, WebResourceRequest request) {
+                                WebResourceRequest request) {
                             return null;
                         }
                     });
