@@ -1,4 +1,4 @@
-package top.yemanqi.pokecatch;
+package top.yemanqi.pokebonk;
 
 import android.app.Activity;
 import android.graphics.Color;
@@ -27,9 +27,9 @@ import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends Activity {
 
-    // 直接连官方地址。Gecko 自带 DNS，能在 IPv6 不通时回落到 IPv4（fast-fallback-to-IPv4），
-    // 而且 location.origin 与官方一致 —— Supabase 的登录回调白名单才认，登录/云存档才能用。
-    private static final String START_URL = "https://pokecatch-online.netlify.app/";
+    // 直连官方。Gecko 自带 DNS，能在 IPv6 不通时回落到 IPv4。
+    // pokebonk.com 和 api.pokebonk.com 都有 AAAA 记录，走系统解析在网络不好时会卡住。
+    private static final String START_URL = "https://pokebonk.com/?lang=zh";
 
     private GeckoRuntime runtime;
     private GeckoSession session;
@@ -49,14 +49,13 @@ public class MainActivity extends Activity {
 
         geckoView = new GeckoView(this);
         geckoView.setBackgroundColor(Color.BLACK);
-        // 要能被 IME 附着：可聚焦 + 点击时拿焦点，否则软键盘弹不出来
+        // 要能被 IME 附着，否则点输入框弹不出键盘
         geckoView.setFocusable(true);
         geckoView.setFocusableInTouchMode(true);
         geckoView.setOnClickListener(v -> v.requestFocus());
         root.addView(geckoView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // 加载提示
         loadingView = new LinearLayout(this);
         loadingView.setOrientation(LinearLayout.VERTICAL);
         loadingView.setGravity(Gravity.CENTER);
@@ -91,23 +90,16 @@ public class MainActivity extends Activity {
     }
 
     private void startGecko() {
-        // GeckoView 支持从一个 YAML 读 prefs。APK 是 debug 签名（debuggable），这条路可用。
-        // 三条关键 pref：
-        //   network.dns.disableIPv6        —— 完全不查 AAAA，避开运营商断掉的 IPv6 路径
-        //   network.http.fast-fallback-to-IPv4 —— 万一同一条连接里 IPv6 已排上，5 秒内回退 IPv4
-        //   network.dns.native             —— 用系统解析器（Android 的 getaddrinfo），保持与系统一致
         File cfg = new File(getFilesDir(), "geckoview-config.yaml");
         try (FileOutputStream out = new FileOutputStream(cfg)) {
-            // network.dns.ipv4OnlyDomains：只让这几个域名用 IPv4。
-            // 比全局关 IPv6 温和，别的站点（比如谷歌账号页）仍然可以走 IPv6。
-            // 这三个正是手机怎么也连不上的：netlify 和 Cloudflare Pages 的 AAAA 记录都在。
+            // 只让这两个域名用 IPv4，比全局关 IPv6 温和
             String yaml = "prefs:\n"
                     + "  network.dns.disableIPv6: true\n"
-                    + "  network.dns.ipv4OnlyDomains: 'pokecatch-online.netlify.app,pokecatch-online.pages.dev'\n"
-                    + "  network.http.fast-fallback-to-IPv4: true\n";
+                    + "  network.dns.ipv4OnlyDomains: 'pokebonk.com,api.pokebonk.com'\n"
+                    + "  network.http.fast-fallback-to-IPv4: true\n"
+                    + "  webgl.force-enabled: true\n";
             out.write(yaml.getBytes(StandardCharsets.UTF_8));
         } catch (Exception ignored) {
-            // 写不进去也不致命，只是少了强制 IPv4
         }
 
         GeckoRuntimeSettings settings = new GeckoRuntimeSettings.Builder()
@@ -133,15 +125,13 @@ public class MainActivity extends Activity {
                 if (success) {
                     offlineView.setVisibility(View.GONE);
                     geckoView.setVisibility(View.VISIBLE);
-                    geckoView.postDelayed(MainActivity.this::hideLoading, 3000);
+                    geckoView.postDelayed(MainActivity.this::hideLoading, 2500);
                 } else {
                     showOffline();
                 }
             }
         });
 
-        // GeckoView 不会自己弹键盘：页面里的输入框拿到焦点后，必须由 App 显式把 IME 叫出来。
-        // 不实现这个委讬，登录页点名密码框时就是「点了没反应」。
         session.setTextInputDelegate(new GeckoSession.TextInputDelegate() {
             @Override
             public void showSoftInput(GeckoSession s) {
@@ -165,7 +155,6 @@ public class MainActivity extends Activity {
         session.setContentDelegate(new GeckoSession.ContentDelegate() {
             @Override
             public void onCloseRequest(GeckoSession s) {
-                // 弹窗被关掉时回到主页面，别停在空白
                 s.close();
             }
         });
@@ -178,8 +167,6 @@ public class MainActivity extends Activity {
 
     private void hideLoading() {
         loadingView.setVisibility(View.GONE);
-        loadingBar.setVisibility(View.GONE);
-        loadingText.setVisibility(View.GONE);
     }
 
     private LinearLayout buildOfflineView() {
@@ -236,9 +223,7 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (keyCode == KeyEvent.KEYCODE_BACK && session != null
-                && session.getHistoryDelegate() == null) {
-            final boolean[] handled = {false};
+        if (keyCode == KeyEvent.KEYCODE_BACK && session != null) {
             session.goBack();
             return true;
         }

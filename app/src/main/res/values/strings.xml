@@ -1,7 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Poke\'Catch</string>
-    <string name="offline_title">连不上</string>
-    <string name="offline_desc">检查一下网络，然后重试。</string>
-    <string name="retry">重试</string>
+    <string name="app_name">PokeBonk</string>
 </resources>

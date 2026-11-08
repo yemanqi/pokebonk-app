@@ -4,19 +4,11 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#E3350D"
-        android:pathData="M54,14a40,40 0 1,0 0,80a40,40 0 1,0 0,-80z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,34a20,20 0 1,0 0,40a20,20 0 1,0 0,-40z" />
-    <path
-        android:fillColor="#1B1B1B"
-        android:pathData="M14,50h30a10,10 0 0,0 20,0h30v8h-30a10,10 0 0,1 -20,0h-30z" />
-    <path
-        android:fillColor="#1B1B1B"
-        android:pathData="M54,44a10,10 0 1,0 0,20a10,10 0 1,0 0,-20z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,48a6,6 0 1,0 0,12a6,6 0 1,0 0,-12z" />
+    <!-- 深底 -->
+    <path android:fillColor="#141824" android:pathData="M0,0h108v108h-108z" />
+    <!-- 爪印：三趾 + 掌垫 -->
+    <path android:fillColor="#F2C14E" android:pathData="M38,40a7,8 0 1,0 0.1,0z" />
+    <path android:fillColor="#F2C14E" android:pathData="M54,32a7,8 0 1,0 0.1,0z" />
+    <path android:fillColor="#F2C14E" android:pathData="M70,40a7,8 0 1,0 0.1,0z" />
+    <path android:fillColor="#F2C14E" android:pathData="M54,58c-12,0 -20,9 -20,17c0,6 6,9 12,7c3,-1 5,-2 8,-2c3,0 5,1 8,2c6,2 12,-1 12,-7c0,-8 -8,-17 -20,-17z" />
 </vector>
