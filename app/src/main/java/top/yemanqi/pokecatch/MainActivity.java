@@ -29,6 +29,23 @@ public class MainActivity extends Activity {
 
     private static final String START_URL = "https://dsh.mianqi.top/pokecatch/";
 
+    // 这些域名的页面必须留在 WebView 里。谷歌/Discord 登录是「跳出去 → 授权 → 跳回来」三段式，
+    // 一旦第一跳被甩到系统浏览器，cookie 和回调都落在浏览器那边，游戏永远等不到登录结果。
+    // 谷歌会拒绝带 "wv" 标记的 WebView 做 OAuth（disallowed_useragent）。伪装成普通 Chrome 手机版，
+    // 把 WebView 的 wv / Version/4.0 标记去掉。
+    private static final String UA =
+            "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) "
+            + "Chrome/131.0.0.0 Mobile Safari/537.36";
+
+    private static final java.util.regex.Pattern STAY_INSIDE = java.util.regex.Pattern.compile(
+            "dsh\\.mianqi\\.top/pokecatch"
+            + "|supabase\\.co"
+            + "|accounts\\.google\\.com"
+            + "|oauth2\\.googleapis\\.com"
+            + "|google\\.com/signin"
+            + "|discord\\.com/(oauth2|developers)"
+            + "|discordapp\\.com");
+
     private WebView webView;
     private LinearLayout offlineView;
     private ProgressBar loadingBar;
@@ -60,6 +77,7 @@ public class MainActivity extends Activity {
         s.setAllowContentAccess(false);
         // 游戏用 https + 跨域 CDN，混合内容一律放行没有意义，保持严格
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        s.setUserAgentString(UA);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             s.setSafeBrowsingEnabled(false);
         }
@@ -81,6 +99,37 @@ public class MainActivity extends Activity {
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
+            public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
+                // 谷歌登录常用 window.open 弹个小窗；同样留在内部，建一个子 WebView 接住
+                WebView popup = new WebView(MainActivity.this);
+                WebSettings ps = popup.getSettings();
+                ps.setJavaScriptEnabled(true);
+                ps.setDomStorageEnabled(true);
+                ps.setUserAgentString(webView.getSettings().getUserAgentString());
+                popup.setWebViewClient(new WebViewClient() {
+                    @Override
+                    public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
+                        String u = r.getUrl().toString();
+                        if (STAY_INSIDE.matcher(u).find()) return false;
+                        try { startActivity(new Intent(Intent.ACTION_VIEW, r.getUrl())); } catch (Exception ignored) { }
+                        return true;
+                    }
+                    @Override
+                    public void onPageFinished(WebView v, String url) {
+                        super.onPageFinished(v, url);
+                        // 授权完成会跳回游戏站点，这时候把结果交还给主 WebView
+                        if (url.contains("dsh.mianqi.top/pokecatch")) {
+                            webView.loadUrl(url);
+                        }
+                    }
+                });
+                WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
+                transport.setWebView(popup);
+                resultMsg.sendToTarget();
+                return true;
+            }
+
+            @Override
             public void onProgressChanged(WebView view, int newProgress) {
                 if (newProgress >= 90) hideLoading();
             }
@@ -90,7 +139,7 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString();
-                if (url.contains("dsh.mianqi.top/pokecatch")) return false;
+                if (STAY_INSIDE.matcher(url).find()) return false;
                 try {
                     startActivity(new Intent(Intent.ACTION_VIEW, request.getUrl()));
                 } catch (Exception ignored) { }
