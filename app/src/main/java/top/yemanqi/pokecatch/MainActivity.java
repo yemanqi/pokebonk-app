@@ -114,7 +114,6 @@ public class MainActivity extends Activity {
         ss.setUserAgentMode(GeckoSessionSettings.USER_AGENT_MODE_MOBILE);
         ss.setViewportMode(GeckoSessionSettings.VIEWPORT_MODE_MOBILE);
         ss.setAllowJavascript(true);
-        ss.setConsoleOutputEnabled(false);
 
         session.setProgressDelegate(new GeckoSession.ProgressDelegate() {
             @Override
