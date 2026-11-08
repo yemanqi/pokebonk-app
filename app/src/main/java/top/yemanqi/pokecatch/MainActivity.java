@@ -136,13 +136,9 @@ public class MainActivity extends Activity {
 
         session.setContentDelegate(new GeckoSession.ContentDelegate() {
             @Override
-            public GeckoSession onCreateWindow(GeckoSession opener,
-                                               @org.mozilla.geckoview.GeckoSession.ContentDelegate.OpenWindowInfo info) {
-                // 谷歌登录有时用 window.open 弹窗。开一个新 session 接住，不丢。
-                GeckoSession popup = new GeckoSession();
-                popup.getSettings().setUserAgentMode(GeckoSessionSettings.USER_AGENT_MODE_MOBILE);
-                popup.open(runtime);
-                return popup;
+            public void onCloseRequest(GeckoSession s) {
+                // 弹窗被关掉时回到主页面，别停在空白
+                s.close();
             }
         });
 
