@@ -1,57 +1,45 @@
 package top.yemanqi.pokecatch;
 
-import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.content.Intent;
 import android.graphics.Color;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
-import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.webkit.CookieManager;
-import android.webkit.WebChromeClient;
-import android.webkit.WebResourceError;
-import android.webkit.WebResourceRequest;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
+import org.mozilla.geckoview.GeckoRuntime;
+import org.mozilla.geckoview.GeckoRuntimeSettings;
+import org.mozilla.geckoview.GeckoSession;
+import org.mozilla.geckoview.GeckoSessionSettings;
+import org.mozilla.geckoview.GeckoView;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
+
 public class MainActivity extends Activity {
 
-    private static final String START_URL = "https://dsh.mianqi.top/pokecatch/";
+    // 直接连官方地址。Gecko 自带 DNS，能在 IPv6 不通时回落到 IPv4（fast-fallback-to-IPv4），
+    // 而且 location.origin 与官方一致 —— Supabase 的登录回调白名单才认，登录/云存档才能用。
+    private static final String START_URL = "https://pokecatch-online.netlify.app/";
 
-    // 这些域名的页面必须留在 WebView 里。谷歌/Discord 登录是「跳出去 → 授权 → 跳回来」三段式，
-    // 一旦第一跳被甩到系统浏览器，cookie 和回调都落在浏览器那边，游戏永远等不到登录结果。
-    // 谷歌会拒绝带 "wv" 标记的 WebView 做 OAuth（disallowed_useragent）。伪装成普通 Chrome 手机版，
-    // 把 WebView 的 wv / Version/4.0 标记去掉。
-    private static final String UA =
-            "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) "
-            + "Chrome/131.0.0.0 Mobile Safari/537.36";
+    private GeckoRuntime runtime;
+    private GeckoSession session;
+    private GeckoView geckoView;
 
-    private static final java.util.regex.Pattern STAY_INSIDE = java.util.regex.Pattern.compile(
-            "dsh\\.mianqi\\.top/pokecatch"
-            + "|supabase\\.co"
-            + "|accounts\\.google\\.com"
-            + "|oauth2\\.googleapis\\.com"
-            + "|google\\.com/signin"
-            + "|discord\\.com/(oauth2|developers)"
-            + "|discordapp\\.com");
-
-    private WebView webView;
     private LinearLayout offlineView;
+    private LinearLayout loadingView;
     private ProgressBar loadingBar;
     private TextView loadingText;
 
-    @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -59,113 +47,13 @@ public class MainActivity extends Activity {
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
 
-        webView = new WebView(this);
-        webView.setBackgroundColor(Color.BLACK);
-
-        WebSettings s = webView.getSettings();
-        s.setJavaScriptEnabled(true);
-        s.setDomStorageEnabled(true);
-        s.setDatabaseEnabled(true);
-        s.setLoadWithOverviewMode(true);
-        s.setUseWideViewPort(true);
-        s.setSupportZoom(false);
-        s.setBuiltInZoomControls(false);
-        s.setMediaPlaybackRequiresUserGesture(false);
-        s.setCacheMode(WebSettings.LOAD_DEFAULT);
-        s.setJavaScriptCanOpenWindowsAutomatically(true);
-        s.setAllowFileAccess(false);
-        s.setAllowContentAccess(false);
-        // 游戏用 https + 跨域 CDN，混合内容一律放行没有意义，保持严格
-        s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        s.setUserAgentString(UA);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            s.setSafeBrowsingEnabled(false);
-        }
-        // 站点依赖 Service Worker 缓存游戏资源；WebView 默认不启用
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            android.webkit.ServiceWorkerController.getInstance()
-                    .setServiceWorkerClient(new android.webkit.ServiceWorkerClient() {
-                        @Override
-                        public android.webkit.WebResourceResponse shouldInterceptRequest(
-                                WebResourceRequest request) {
-                            return null;
-                        }
-                    });
-        }
-
-        CookieManager cm = CookieManager.getInstance();
-        cm.setAcceptCookie(true);
-        cm.setAcceptThirdPartyCookies(webView, true);
-
-        webView.setWebChromeClient(new WebChromeClient() {
-            @Override
-            public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
-                // 谷歌登录常用 window.open 弹个小窗；同样留在内部，建一个子 WebView 接住
-                WebView popup = new WebView(MainActivity.this);
-                WebSettings ps = popup.getSettings();
-                ps.setJavaScriptEnabled(true);
-                ps.setDomStorageEnabled(true);
-                ps.setUserAgentString(webView.getSettings().getUserAgentString());
-                popup.setWebViewClient(new WebViewClient() {
-                    @Override
-                    public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
-                        String u = r.getUrl().toString();
-                        if (STAY_INSIDE.matcher(u).find()) return false;
-                        try { startActivity(new Intent(Intent.ACTION_VIEW, r.getUrl())); } catch (Exception ignored) { }
-                        return true;
-                    }
-                    @Override
-                    public void onPageFinished(WebView v, String url) {
-                        super.onPageFinished(v, url);
-                        // 授权完成会跳回游戏站点，这时候把结果交还给主 WebView
-                        if (url.contains("dsh.mianqi.top/pokecatch")) {
-                            webView.loadUrl(url);
-                        }
-                    }
-                });
-                WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
-                transport.setWebView(popup);
-                resultMsg.sendToTarget();
-                return true;
-            }
-
-            @Override
-            public void onProgressChanged(WebView view, int newProgress) {
-                if (newProgress >= 90) hideLoading();
-            }
-        });
-
-        webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                String url = request.getUrl().toString();
-                if (STAY_INSIDE.matcher(url).find()) return false;
-                try {
-                    startActivity(new Intent(Intent.ACTION_VIEW, request.getUrl()));
-                } catch (Exception ignored) { }
-                return true;
-            }
-
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                super.onPageFinished(view, url);
-                offlineView.setVisibility(View.GONE);
-                webView.setVisibility(View.VISIBLE);
-                // 网页壳加载完了，但游戏是异步起的，多等一会再收起进度条
-                view.postDelayed(MainActivity.this::hideLoading, 3500);
-            }
-
-            @Override
-            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                if (request.isForMainFrame()) showOffline();
-            }
-        });
-
-        root.addView(webView, new FrameLayout.LayoutParams(
+        geckoView = new GeckoView(this);
+        geckoView.setBackgroundColor(Color.BLACK);
+        root.addView(geckoView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // 加载提示：一个居中的进度圈 + 一行小字，避免黑屏看不出状态
-        LinearLayout loadingView = new LinearLayout(this);
+        // 加载提示
+        loadingView = new LinearLayout(this);
         loadingView.setOrientation(LinearLayout.VERTICAL);
         loadingView.setGravity(Gravity.CENTER);
         loadingView.setBackgroundColor(Color.BLACK);
@@ -193,20 +81,81 @@ public class MainActivity extends Activity {
 
         setContentView(root);
 
-        if (isOnline()) {
-            webView.loadUrl(START_URL);
-        } else {
-            showOffline();
+        startGecko();
+
+        if (!isOnline()) showOffline();
+    }
+
+    private void startGecko() {
+        // GeckoView 支持从一个 YAML 读 prefs。APK 是 debug 签名（debuggable），这条路可用。
+        // 三条关键 pref：
+        //   network.dns.disableIPv6        —— 完全不查 AAAA，避开运营商断掉的 IPv6 路径
+        //   network.http.fast-fallback-to-IPv4 —— 万一同一条连接里 IPv6 已排上，5 秒内回退 IPv4
+        //   network.dns.native             —— 用系统解析器（Android 的 getaddrinfo），保持与系统一致
+        File cfg = new File(getFilesDir(), "geckoview-config.yaml");
+        try (FileOutputStream out = new FileOutputStream(cfg)) {
+            String yaml = "prefs:\n"
+                    + "  network.dns.disableIPv6: true\n"
+                    + "  network.http.fast-fallback-to-IPv4: true\n"
+                    + "  network.dns.native: true\n";
+            out.write(yaml.getBytes(StandardCharsets.UTF_8));
+        } catch (Exception ignored) {
+            // 写不进去也不致命，只是少了强制 IPv4
         }
+
+        GeckoRuntimeSettings settings = new GeckoRuntimeSettings.Builder()
+                .configFilePath(cfg.getAbsolutePath())
+                .remoteDebuggingEnabled(false)
+                .build();
+        runtime = GeckoRuntime.create(getApplicationContext(), settings);
+
+        session = new GeckoSession();
+        GeckoSessionSettings ss = session.getSettings();
+        ss.setUserAgentMode(GeckoSessionSettings.USER_AGENT_MODE_MOBILE);
+        ss.setViewportMode(GeckoSessionSettings.VIEWPORT_MODE_MOBILE);
+        ss.setAllowJavascript(true);
+        ss.setConsoleOutputEnabled(false);
+
+        session.setProgressDelegate(new GeckoSession.ProgressDelegate() {
+            @Override
+            public void onProgressChange(GeckoSession s, int progress) {
+                if (progress >= 90) hideLoading();
+            }
+
+            @Override
+            public void onPageStop(GeckoSession s, boolean success) {
+                if (success) {
+                    offlineView.setVisibility(View.GONE);
+                    geckoView.setVisibility(View.VISIBLE);
+                    geckoView.postDelayed(MainActivity.this::hideLoading, 3000);
+                } else {
+                    showOffline();
+                }
+            }
+        });
+
+        session.setContentDelegate(new GeckoSession.ContentDelegate() {
+            @Override
+            public GeckoSession onCreateWindow(GeckoSession opener,
+                                               @org.mozilla.geckoview.GeckoSession.ContentDelegate.OpenWindowInfo info) {
+                // 谷歌登录有时用 window.open 弹窗。开一个新 session 接住，不丢。
+                GeckoSession popup = new GeckoSession();
+                popup.getSettings().setUserAgentMode(GeckoSessionSettings.USER_AGENT_MODE_MOBILE);
+                popup.open(runtime);
+                return popup;
+            }
+        });
+
+        session.open(runtime);
+        geckoView.setSession(session);
+        session.setActive(true);
+        session.loadUri(START_URL);
     }
 
     private void hideLoading() {
+        loadingView.setVisibility(View.GONE);
         loadingBar.setVisibility(View.GONE);
         loadingText.setVisibility(View.GONE);
-        loadingBar.getRootView();
-        if (loadingBar.getParent() instanceof View) {
-            ((View) loadingBar.getParent()).setVisibility(View.GONE);
-        }
     }
 
     private LinearLayout buildOfflineView() {
@@ -234,8 +183,8 @@ public class MainActivity extends Activity {
         retry.setOnClickListener(v -> {
             if (isOnline()) {
                 offlineView.setVisibility(View.GONE);
-                webView.setVisibility(View.VISIBLE);
-                webView.loadUrl(START_URL);
+                geckoView.setVisibility(View.VISIBLE);
+                if (session != null) session.loadUri(START_URL);
             }
         });
 
@@ -258,27 +207,26 @@ public class MainActivity extends Activity {
     private void showOffline() {
         hideLoading();
         offlineView.setVisibility(View.VISIBLE);
-        webView.setVisibility(View.GONE);
+        geckoView.setVisibility(View.GONE);
     }
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (keyCode == KeyEvent.KEYCODE_BACK && webView.canGoBack()) {
-            webView.goBack();
+        if (keyCode == KeyEvent.KEYCODE_BACK && session != null
+                && session.getHistoryDelegate() == null) {
+            final boolean[] handled = {false};
+            session.goBack();
             return true;
         }
         return super.onKeyDown(keyCode, event);
     }
 
     @Override
-    protected void onSaveInstanceState(Bundle outState) {
-        super.onSaveInstanceState(outState);
-        webView.saveState(outState);
-    }
-
-    @Override
-    protected void onRestoreInstanceState(Bundle savedInstanceState) {
-        super.onRestoreInstanceState(savedInstanceState);
-        webView.restoreState(savedInstanceState);
+    protected void onDestroy() {
+        if (session != null) {
+            session.close();
+            session = null;
+        }
+        super.onDestroy();
     }
 }

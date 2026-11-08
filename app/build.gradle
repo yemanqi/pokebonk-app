@@ -10,8 +10,12 @@ android {
         applicationId "top.yemanqi.pokecatch"
         minSdk 24
         targetSdk 34
-        versionCode 4
-        versionName "1.3"
+        versionCode 5
+        versionName "2.0-gecko"
+        // 只打 arm64：GeckoView 是全量内核，按架构分包后仍有 ~60MB
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
     }
 
     buildTypes {
@@ -29,7 +33,10 @@ android {
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
-    implementation 'androidx.webkit:webkit:1.11.0'
+    // Firefox 内核。选它的原因：自带 Necko 网络栈，有自己的 DNS 解析和
+    // "network.dns.disableIPv6" 开关，不依赖系统解析器，也就不会踩到
+    // 手机优先走 IPv6、而运营商 IPv6 到 Cloudflare/AWS 全断的坑。
+    implementation 'org.mozilla.geckoview:geckoview-arm64-v8a:159.0.20261102144711'
 
     // 统一 Kotlin 标准库版本：appcompat 与 webkit 各自带了一份 kotlin-stdlib，
     // 版本不一致会让 checkDebugDuplicateClasses 报 duplicate class（1.8.22 vs 1.6.21）

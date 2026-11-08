@@ -10,6 +10,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // GeckoView 只发在 Mozilla 自己的 maven 上
+        maven { url 'https://maven.mozilla.org/maven2/' }
     }
 }
 rootProject.name = "PokeCatch"
