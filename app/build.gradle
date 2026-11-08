@@ -36,7 +36,7 @@ dependencies {
     // Firefox 内核。选它的原因：自带 Necko 网络栈，有自己的 DNS 解析和
     // "network.dns.disableIPv6" 开关，不依赖系统解析器，也就不会踩到
     // 手机优先走 IPv6、而运营商 IPv6 到 Cloudflare/AWS 全断的坑。
-    implementation 'org.mozilla.geckoview:geckoview-arm64-v8a:159.0.20261102144711'
+    implementation 'org.mozilla.geckoview:geckoview-arm64-v8a:128.0.20240722223746'
 
     // 统一 Kotlin 标准库版本：appcompat 与 webkit 各自带了一份 kotlin-stdlib，
     // 版本不一致会让 checkDebugDuplicateClasses 报 duplicate class（1.8.22 vs 1.6.21）
