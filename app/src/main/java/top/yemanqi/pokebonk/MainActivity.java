@@ -132,7 +132,7 @@ public class MainActivity extends Activity {
             }
         });
 
-        session.setTextInputDelegate(new GeckoSession.TextInputDelegate() {
+        session.getTextInput().setDelegate(new GeckoSession.TextInputDelegate() {
             @Override
             public void showSoftInput(GeckoSession s) {
                 if (geckoView == null) return;
