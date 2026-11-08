@@ -49,6 +49,10 @@ public class MainActivity extends Activity {
 
         geckoView = new GeckoView(this);
         geckoView.setBackgroundColor(Color.BLACK);
+        // 要能被 IME 附着：可聚焦 + 点击时拿焦点，否则软键盘弹不出来
+        geckoView.setFocusable(true);
+        geckoView.setFocusableInTouchMode(true);
+        geckoView.setOnClickListener(v -> v.requestFocus());
         root.addView(geckoView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
@@ -133,6 +137,28 @@ public class MainActivity extends Activity {
                 } else {
                     showOffline();
                 }
+            }
+        });
+
+        // GeckoView 不会自己弹键盘：页面里的输入框拿到焦点后，必须由 App 显式把 IME 叫出来。
+        // 不实现这个委讬，登录页点名密码框时就是「点了没反应」。
+        session.setTextInputDelegate(new GeckoSession.TextInputDelegate() {
+            @Override
+            public void showSoftInput(GeckoSession s) {
+                if (geckoView == null) return;
+                geckoView.requestFocus();
+                android.view.inputmethod.InputMethodManager imm =
+                        (android.view.inputmethod.InputMethodManager)
+                                getSystemService(INPUT_METHOD_SERVICE);
+                if (imm != null) imm.showSoftInput(geckoView, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+            }
+
+            @Override
+            public void hideSoftInput(GeckoSession s) {
+                android.view.inputmethod.InputMethodManager imm =
+                        (android.view.inputmethod.InputMethodManager)
+                                getSystemService(INPUT_METHOD_SERVICE);
+                if (imm != null) imm.hideSoftInputFromWindow(geckoView.getWindowToken(), 0);
             }
         });
 
