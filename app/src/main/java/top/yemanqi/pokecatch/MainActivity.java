@@ -94,10 +94,13 @@ public class MainActivity extends Activity {
         //   network.dns.native             —— 用系统解析器（Android 的 getaddrinfo），保持与系统一致
         File cfg = new File(getFilesDir(), "geckoview-config.yaml");
         try (FileOutputStream out = new FileOutputStream(cfg)) {
+            // network.dns.ipv4OnlyDomains：只让这几个域名用 IPv4。
+            // 比全局关 IPv6 温和，别的站点（比如谷歌账号页）仍然可以走 IPv6。
+            // 这三个正是手机怎么也连不上的：netlify 和 Cloudflare Pages 的 AAAA 记录都在。
             String yaml = "prefs:\n"
                     + "  network.dns.disableIPv6: true\n"
-                    + "  network.http.fast-fallback-to-IPv4: true\n"
-                    + "  network.dns.native: true\n";
+                    + "  network.dns.ipv4OnlyDomains: 'pokecatch-online.netlify.app,pokecatch-online.pages.dev'\n"
+                    + "  network.http.fast-fallback-to-IPv4: true\n";
             out.write(yaml.getBytes(StandardCharsets.UTF_8));
         } catch (Exception ignored) {
             // 写不进去也不致命，只是少了强制 IPv4
